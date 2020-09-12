@@ -1,0 +1,37 @@
+---
+title: "Fiji_Quakes"
+author: "Jared Lourie"
+date: "9/12/2020"
+output: html_document
+---
+# 1
+
+```{r setup, include=FALSE}
+data(quakes)
+```
+```{r str&sum, echo=FALSE}
+str(quakes)
+summary(quakes)
+```
+Number of observations is 1000, shows basic descriptive statistics, and shows the values for each entry are coordinates, depth, magnitude, and station number
+
+# 2
+```{r quakes_long, echo=FALSE}
+unlist(quakes['long'])
+```
+So many values here even when you unlist so the page doesn't become too long
+
+# 3
+```{r quakes_unique, echo=FALSE}
+print(paste('There are ', length(unique(quakes$stations)), ' stations', sep=''))
+```
+# 4
+```{r quakes_range, echo=FALSE}
+range(quakes['depth'])
+print(paste('The minimum depth detected is ', min(quakes$depth), ' km and the maximum depth detected is ', max(quakes$depth), ' km', sep=''))
+```
+
+# EC
+```{r quakes_ec, echo=FALSE}
+print(paste('Station number ', quakes[quakes$mag == max(quakes['mag']),]$stations, ' had the highest magnitude earthquake', sep=''))
+```
