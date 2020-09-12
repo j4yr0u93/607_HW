@@ -1,6 +1,6 @@
 ---
 title: "Fiji_Quakes"
-author: "Jared Lourie"
+author: "j4yr0u93"
 date: "9/12/2020"
 output: html_document
 ---
