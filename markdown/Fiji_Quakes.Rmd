@@ -31,7 +31,11 @@ range(quakes['depth'])
 print(paste('The minimum depth detected is ', min(quakes$depth), ' km and the maximum depth detected is ', max(quakes$depth), ' km', sep=''))
 ```
 
-# EC
+# extra credit
 ```{r quakes_ec, echo=FALSE}
 print(paste('Station number ', quakes[quakes$mag == max(quakes['mag']),]$stations, ' had the highest magnitude earthquake', sep=''))
 ```
+
+# git extra credit
+pushed my repo and submitting the whole repo as hw \
+[HW_1 github link](https://github.com/j4yr0u93/HW_1)
