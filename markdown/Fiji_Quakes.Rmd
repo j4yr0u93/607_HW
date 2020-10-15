@@ -38,4 +38,4 @@ print(paste('Station number ', quakes[quakes$mag == max(quakes['mag']),]$station
 
 # git extra credit
 pushed my repo and submitting the whole repo as hw \
-[HW_1 github link](https://github.com/j4yr0u93/HW_1)
+[github link](https://github.com/j4yr0u93/607_HW)

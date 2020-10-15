@@ -145,7 +145,7 @@ Laymans understanding of these plots is that as more values are added we approac
 
 # git extra credit
 pushed my repo and submitting the whole repo as hw \
-[HW_2 github link](https://github.com/j4yr0u93/HW_2)
+[github link](https://github.com/j4yr0u93/607_HW)
 
 
 
