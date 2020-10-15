@@ -1,0 +1,158 @@
+---
+title: "Sampling and Iteration in the Tidyverse"
+author: "j4yr0u93"
+date: "9/20/2020"
+output: html_document
+---
+
+```{r data&lib_load, include=FALSE}
+#load libs for hw
+library(tidyverse)
+library(palmerpenguins)
+library(pixiedust)
+library(kableExtra)
+library(gridExtra)
+```
+
+# 1
+
+```{r flippers, echo=FALSE}
+#pull first entries from penguins
+head(penguins)
+#get class infor about cols, names, and some entries
+str(penguins)
+#get basic stats about penguins col vals and factor counts
+summary(penguins)
+```
+
+`str()` tells us that `species`, `island`, & `sex` are factors with 3 levels whereas `bill_length_mm` & `bill_depth_mm` or `flipper_length_mm`, `body_mass_g `, & `year` are numbers, the latter all being integers. It also tells us we have 344 entries. \
+ \
+ `summary()` gives counts of our factors or tells us when they are undertermined like `NA` for sex. It also tells us summary statistics about each column. Quantiles for bill depth are `15.60 mm`, `17.30 mm`, & `18.70 mm`. \
+  \
+ These quantiles mean that 50% of the population has `bill_depth_mm` between `15.60 mm` & `18.70 mm`. \
+  \
+
+# 2a
+```{r whack_vec, echo=FALSE}
+#create the vector given
+vector <- c(1,4,7,NA,9)
+'our vector is c(1,4,7,NA,9)'
+'mean(vector) produces:'
+#take literal mean of vector
+mean(vector)
+'whereas mean(vector, na.rm=TRUE) produces:'
+#take mean of vector excluding NA vals
+mean(vector, na.rm=TRUE)
+```
+# 2b-d
+```{r fat_penguins, include=FALSE}
+#sd, mean, med, and count of # of penguins by species, each species is a row in df
+by_species <- penguins %>% group_by(species) %>% mutate(sd = sd(body_mass_g, na.rm = TRUE),
+                                                      mean = mean(body_mass_g, na.rm = TRUE),
+                                                      median = median(body_mass_g, na.rm = TRUE),
+                                                      count = length(species)) %>% 
+                           ungroup() %>% select(species, count, sd, mean, median) %>%  distinct() %>% rename(target = species)
+#sd, mean, med, and count of # of penguins total no species separation, 1 row df
+all_species <- penguins %>% mutate(sd = sd(body_mass_g, na.rm = TRUE),
+                                   mean = mean(body_mass_g, na.rm = TRUE),
+                                   median = median(body_mass_g, na.rm = TRUE),
+                                   count = length(species),
+                                   target = 'All Penguins') %>%
+                            select(target, count, sd, mean, median) %>% distinct()
+#sd, mean, med, and count of # of penguins on biscoe island, 1 row df
+biscoe_island <- penguins %>% filter(island == 'Biscoe') %>% mutate(sd = sd(body_mass_g, na.rm = TRUE),
+                                                                    mean = mean(body_mass_g, na.rm = TRUE),
+                                                                    median = median(body_mass_g, na.rm = TRUE),
+                                                                    count = length(species),
+                                                                    target = 'Biscoe Island') %>%
+                              ungroup %>% select(target, count, sd, mean, median) %>% distinct()
+#combine all the dfs to just have a df with the specified targets, not the best method but simple in practice, better method would just append distinct mutations to a new df instead of joining
+bm_2d_stats <- full_join(by_species, all_species) %>% full_join(biscoe_island)
+```
+```{r what_penguins, echo=FALSE}
+print('Standard stats of penguin body mass are:')
+#pixiedust x kable table that looks better than normal table, rounding and kable styling default
+dust(bm_2d_stats) %>%
+  sprinkle(col = 2:5, round = 4) %>% kable() %>% kable_styling()
+```
+Gentoo penguins have highest mean mass compared to Chinstrap and Adelie, Gentoo on average weigh more then. Chinstrap Penguins have a similar mean and the same median mass value to Adelie penguins, but have a tighter distribution of masses since they have a smaller sd. When looking at biscoe island and all penguins combined, we can assume that biscoe island is closer to having a distribution of more than one species, and we know that Gentoo are present since the mean and median are greater than the exclusively Chinstrap and Adelie populations. \
+
+# 2e
+```{r paste_is_my_homie, echo=FALSE}
+#str manipulation '' for col name with mutate to get species/island as a combined factor
+pasted_penguins <- penguins %>% mutate('species-island' = as.factor(paste(species, island, sep = '_')))
+str(pasted_penguins)
+unique(pasted_penguins$'species-island')
+```
+Looking at our 'species-island' factor confirms that Gentoo and Adelie are both present on Biscoe island which explains the mean, median, and sd values above. It also tell use Adelie exist on their own island, an island with Chinstrap, and an island with Gentoo. \
+
+# 3a
+```{r paste_is_my_homie2, include=FALSE}
+#\n or newline version of paste creation
+n_penguins <- penguins %>% mutate('species-island' = as.factor(paste(species, island, sep = '\n')))
+#lame underscore boxplot of pasted_penguins
+pasted_box <- pasted_penguins %>% drop_na() %>% ggplot(mapping = aes(x = `species-island`, y = flipper_length_mm)) + geom_boxplot()
+#dank newline boxplot with n_penguins
+n_box <- n_penguins %>% drop_na() %>% ggplot(mapping = aes(x = `species-island`, y = flipper_length_mm)) + geom_boxplot()
+#density plot of length x mass with color set to species island with dank n_penguins
+pasted_big_long <- n_penguins %>% drop_na() %>% ggplot(mapping = aes(x = flipper_length_mm, y = body_mass_g, color = `species-island`)) + geom_density_2d()
+#density plot with no distinction of species/island target
+penguins_big_long <-n_penguins %>% drop_na() %>% ggplot(mapping = aes(x = flipper_length_mm, y = body_mass_g)) + geom_density_2d()
+```
+```{r whats_in_the_box, echo=FALSE}
+#poggers plotting with gridExtra to put boxplots side by side
+grid.arrange(pasted_box, n_box, ncol = 2)
+```
+\
+Basically newline prevents this garbage on the left from happening were you can't read the label. If you look at our boxplots which are identical in both diagrams, the pretty obvious takeaway is that the the Gentoo have more mass than all other species. The more subtle takeaway is that the Adelie on Torgersen seem like they may have more mass because there is no potential for competition. Islands with competition, i.e. Dream & Biscoe have similar Adelie weight distributions, and they co-habitate with other penguin species. \
+
+# 3b-c
+```{r bruh_im_so_dense, echo=FALSE}
+#no need for density plots to take up more space, basically I scaled them dynamically/vertically and made them take less space with gridExtra here
+grid.arrange(pasted_big_long, penguins_big_long, nrow = 2)
+```
+\
+It seems like there are 2 grouping for the relationship between flipper length and body mass when looking at the density plot of species vs combined species. Adelie and Chinstrap for the most part fall in the same grouping and Gentoo is the only very visually distinct group. \
+
+# 4a-b
+```{r the_matrix, echo=FALSE}
+#get bills for gentoo biscoes
+bisgent <- n_penguins %>% filter(`species-island` == 'Gentoo\nBiscoe') %>% pull(bill_length_mm) %>% na.omit()
+#do se of mean func 10 times
+bisgent_sem <- replicate(10, sd(bisgent)/sqrt(length(bisgent)))
+'bisgent_sem <- replicate(10, sd(bisgent)/sqrt(length(bisgent)))'
+bisgent_sem
+```
+If we sample `bisgent` our Biscoe Gentoo `bill_length_mm` col  taking the mean 10 times, we get a mean standard error of ~0.28. \
+
+# 4c-d
+```{r the_matrix2, echo=FALSE}
+#map for 5:100 sizes taking mean and sd
+bisgent_boot <- map_df(5:100, ~data.frame(size = .x, sample_mean = mean(bisgent[1:.x]), sample_sd = sd(bisgent[1:.x]), sample_se_mean = sd(bisgent[1:.x])/sqrt(length(bisgent[1:.x]))))
+#add se to bisgent boot
+bisgent_boot2 <- bisgent_boot %>% mutate(se_mean = bisgent_sem[1])
+#size x sd plot
+smp_mean_sd <- bisgent_boot2 %>% ggplot(mapping = aes(x = size, y = sample_sd)) +
+  geom_point()
+#size x se of mean plot
+smp_mean_se <- bisgent_boot2 %>% ggplot(mapping = aes(x = size, y = sample_se_mean)) +
+  geom_point()
+#plot
+grid.arrange(smp_mean_sd, smp_mean_se, ncol=2)
+```
+\
+Laymans understanding of these plots is that as more values are added we approach the actual SD and SE of mean, the jump being from an anomaly value at bisgent[34] equal to 59.6 mm and then a return to a tighter SE of mean and closer approximation of SD. SE of mean ultimately is affected less by the outlier since it is a measure of mean confidence whereas SD is more heavily affected by the outlier since it is a measure of the variability or precision of the data altogether. \
+
+# git extra credit
+pushed my repo and submitting the whole repo as hw \
+[HW_2 github link](https://github.com/j4yr0u93/HW_2)
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,92 @@
+---
+title: "Sims and Viz"
+author: "j4yr0u93"
+date: "10/1/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(colorfindr)
+library(gganimate)
+vole_vaso <- c(98,96,94,88,86,82,77,74,70,60, 59,52,50,47,40,35,29,13,6,5)
+```
+
+# 1a-d
+```{r voles, echo=FALSE}
+'#b'
+summary(vole_vaso)
+'#c'
+paste('std error of mean is', sd(vole_vaso)/length(vole_vaso))
+```
+I tripped up every time trying to say vole vasopressin, probably because I didn't have enough coffee yet. 1b stats are displayed just using `summary()` and std error of mean was calculated with `sd(val)/length(val)`. The standard error of the mean tells us that our mean value estimate is not very representative of our data because the sampling distribution of our mean is too large. \
+
+# 2a-e
+```{r ss_voles, echo=FALSE}
+'#a'
+tample <- sample(vole_vaso, 10, replace = TRUE)
+tample
+quantile(tample, probs = 0.75)
+#b
+vole_magic <- data.frame(samp_size = 5:20)
+#c
+vole_quanty <- vole_magic %>% rowwise(samp_size) %>% summarize(quanty = replicate(1000, sample(vole_vaso, samp_size, replace = TRUE) %>% quantile(probs = 0.75)))
+'#d'
+ggplot(vole_quanty, mapping = aes(group = samp_size, x = samp_size, y = quanty)) +
+  geom_boxplot() +
+  geom_hline(yintercept = quantile(vole_vaso, probs = 0.75), color = 'red')
+'#e'
+vole_quanty_se <- vole_magic %>% rowwise(samp_size) %>% summarize(quanty_se = replicate(1000, sample(vole_vaso, samp_size, replace = TRUE) %>% quantile(probs = 0.75)) %>% sd()/(1000*samp_size))
+ggplot(vole_quanty_se, mapping = aes(x = samp_size, y = quanty_se)) +
+  geom_line()
+```
+\
+SE and boxplots of quantile seem to suggest a sample size of 20 is adequate is for working with this system. \
+
+# 3a-c
+
+```{r icey_setup, echo=FALSE}
+seaice_data <- read_csv(file = '../data/NH_seaice_extent_monthly_1978_2016.csv') %>%
+  mutate(Month_Name = factor(Month_Name),
+         Month_Name = fct_reorder(Month_Name, Month))
+'#b'
+ggplot(seaice_data, mapping = aes(x = Month_Name, y = Extent)) + geom_boxplot()
+'#c'
+sea_year <- seaice_data %>% group_by(Year) %>% mutate(min_ice = min(Extent)) %>% ggplot(mapping = aes(x = Year, y = min_ice)) + geom_point() + geom_smooth(method = 'lm')
+sea_year
+```
+\
+Minimial ice is decreasing. tldr; global warming. \
+
+# 3d
+
+```{r ice_facet, echo=FALSE}
+ggplot(seaice_data, mapping = aes(x = Year, y = Extent, color = Month_Name)) +
+  geom_line() +
+  facet_wrap(.~cut_interval(Month, 4))
+```
+
+# 3e
+
+```{r pretty_plot, echo=FALSE}
+#get pallete with colorfindr
+bling <- get_colors(img = "https://i.redd.it/6d3ne3zyn5g41.jpg") %>% make_palette(n = 10)
+
+pog_plot <- seaice_data %>%
+  #plotting
+  ggplot(mapping = aes(x = Month_Name, y = Extent, color = Year)) +
+  #custom gradient
+  scale_color_gradientn(colors = bling) +
+  #geom_line() straight up not working
+  geom_line(aes(group = Year)) +
+  #gganimate support
+  transition_time(Year) +
+  shadow_mark(alpha = 0.4) +
+  labs(title = 'Year: {frame_time}')
+
+pog_plot
+```
+\
+# git extra credit
+pushed my repo and submitting the whole repo as hw \
+[HW_3 github link](https://github.com/j4yr0u93/HW_3)

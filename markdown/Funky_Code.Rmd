@@ -1,0 +1,218 @@
+---
+title: "Functions and Tidy Data"
+author: "j4yr0u93"
+date: "10/5/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+sample_vec <- c('orange', 'apple', 'pear', 'banana', 'kiwi', 'starfruit', 'plum')
+sample_vec2 <- rnorm(10, mean = runif(1, min = 1, max = 100), sd = runif(1, min = 3, max = 5))
+```
+# 1
+```{r boot_funk, echo=FALSE}
+boot <- function(a_vec){
+  #get a sample length equal to vector length
+  samplen <- round(length(a_vec))
+  #take the sample from the vector, with replacement
+  a_sample <- sample(a_vec, samplen, replace = TRUE)
+  #return the sample
+  return(a_sample)
+}
+
+boot(sample_vec)
+```
+# 2
+```{r stat_funk, echo=FALSE}
+stat_boot <- function(a_vec, R_num = 1000, a_funk = 'mean'){
+  #convert a_funk string into the actual funk
+  funk <- get(a_funk)
+  #create first 'row' of stat_df to self rbind in loop
+  stat_df <- data.frame(stat = funk(boot(a_vec)))
+  #loop for R_num iterations
+  while(nrow(stat_df) < R_num){
+    stat_df <- rbind(stat_df, data.frame(stat = funk(boot(a_vec))))
+  }
+  #rename column to funk used
+  colnames(stat_df) <- a_funk
+  #return the df of funks from samples
+  return(stat_df)
+}
+
+stat_boot(sample_vec2, 5)
+```
+# 3
+```{r more_stats, echo=FALSE}
+stat_boot_more <- function(a_vec, R_num = 1000, a_funk = 'mean'){
+  #funk get
+  funk <- get(a_funk)
+  #get the basic df to work with
+  stat_df <- stat_boot(a_vec, R_num, a_funk)
+    #add my mutations to it
+  stats_df <- data.frame(og_stat = funk(a_vec),
+                         boot_stat_mean = mean(stat_df[,1]),
+                         upper_CI = quantile(stat_df[,1], probs = 0.975),
+                         lower_CI = quantile(stat_df[,1], probs = 0.025),
+                         bias = funk(a_vec) - mean(stat_df[,1]),
+                         row.names = NULL)
+  return(stats_df)
+}
+
+stat_boot_more(sample_vec2, 50, 'mean')
+```
+
+```{r load_poll, include=FALSE}
+#get data
+prez_pol <- read_csv('../data/president_polls.csv')
+#load lub for mdy()
+library(lubridate)
+```
+# 4a
+```{r pol_peek, echo=FALSE}
+#peek pol
+head(prez_pol)
+```
+\
+data appears to be hybrid \
+
+# 4b
+```{r date_filter, echo=FALSE}
+#lub filter for prez
+current_prez_pol <- prez_pol %>% filter(answer %in% c('Trump','Biden'), mdy(start_date) > mdy('9/29/20'))
+#peek pol
+head(current_prez_pol)
+```
+
+# 4c
+```{r avg_polls, echo=FALSE}
+#get booted national avgs
+national_avg <- current_prez_pol %>% filter(is.na(state)) %>% group_by(answer) %>% mutate(pol_avg = stat_boot(pct, 1)$mean) %>% select(answer, pol_avg) %>% distinct()
+national_avg
+```
+
+# 4d
+```{r state_dif_boot, echo=FALSE}
+#booted diffs between pols by state w/ national
+pol_diffs <- current_prez_pol %>%
+             mutate(ID = paste(question_id, poll_id, state)) %>%
+             select(ID, state, answer, pct) %>%
+             pivot_wider(names_from = answer,
+              values_from = pct) %>%
+             mutate(diff = Biden - Trump) %>%
+             filter(!is.na(diff)) %>%
+             group_by(state) %>%
+             summarize(stat_boot(diff,1)$mean)
+
+pol_diffs[is.na(pol_diffs)] <- 'National'
+pol_diffs
+```
+
+# 5a
+```{r finding_sd_mean, echo=FALSE}
+#find mean & sd and then rnorm to make vals
+biden_nat_sd <- current_prez_pol %>% filter(answer == 'Biden', is.na(state)) %>% mutate(nat_sd = sd(pct)) %>% select(nat_sd) %>% distinct() %>% as.double()
+biden_nat_mean <- current_prez_pol %>% filter(answer == 'Biden', is.na(state)) %>% mutate(nat_mean = mean(pct)) %>% select(nat_mean) %>% distinct() %>% as.double()
+biden_sim <- replicate(1000, rnorm(50, mean = biden_nat_mean, sd = biden_nat_sd))
+```
+\
+We get an extra large and nasty matrix thing of 50 by 1000 vals, I don't like it. \
+
+# 5b
+```{r tibblify, echo=FALSE}
+#pivot long to get nice sims
+biden_sim_clean <- biden_sim %>%
+  as_tibble(.name_repair) %>%
+  pivot_longer(cols = everything(),
+               names_to = "sim",
+               values_to = "pct")
+#peek sims
+head(biden_sim_clean)
+```
+\
+This looks way better pivoting it just peeking it. Actually seems readable, not that I would read 50k entries. \
+\
+
+# 5c
+```{r bidens_big_boot, echo=FALSE}
+#simple groupby and summarize with funk 3 and then select/distinct because I dislike extra cols
+bidens_boot <- biden_sim_clean %>%
+  group_by(sim) %>%
+  summarize(stat_boot_more(pct, 50)) %>%
+  select(sim, og_stat, boot_stat_mean, upper_CI, lower_CI) %>%
+  distinct()
+
+#plotting boot and sample means with lines showing means of both and red lines with the actual population mean
+ggplot(bidens_boot, mapping = aes(x = og_stat, y = boot_stat_mean, ymin = lower_CI, ymax = upper_CI)) +
+  geom_pointrange(alpha = 0.2) +
+  geom_vline(xintercept = mean(bidens_boot$og_stat)) +
+  geom_hline(yintercept = mean(bidens_boot$boot_stat_mean)) +
+  geom_vline(xintercept = biden_nat_mean, color = 'red', alpha = 0.5) +
+  geom_hline(yintercept = biden_nat_mean, color = 'red', alpha = 0.5)
+
+boot_mean_greater_count <- length(bidens_boot$boot_stat_mean[bidens_boot$boot_stat_mean > biden_nat_mean])
+sample_mean_greater_count <- length(bidens_boot$og_stat[bidens_boot$og_stat > biden_nat_mean])
+
+print(paste('A is', boot_mean_greater_count, 'and B is', sample_mean_greater_count))
+```
+\
+The bootstrapped mean was greater than original A times. The sample mean was greater than the original B times. \
+
+# 5d
+\
+The black intercepts above are means of each axis and the red lines are both the actual means from the pol (visually see difference between boot mean and og mean, as well as sample mean and og mean). Something weird might be going on. CIs formed the lines on each point which just shows the proximal range the simulation occupied for a given point. They also indicate if a simulation contained the true mean when seeing if the red line falls on them. \
+
+# cool current biden map
+```{r eyes_bleeding_code, include=FALSE}
+#lib loading
+library(ggmap)
+library(sf)
+library(USAboundaries)
+
+#US map data loading
+us_states <- us_states() %>%
+  filter(name != "Alaska") %>%
+  filter(name != "Hawaii")
+
+#getting state names for nested loop
+states <- unique(current_prez_pol$state) %>% na.omit()
+
+#wrapper function because I could, literally could have just used groupby
+get_state_avgs <- function(){
+  state_avg <- data.frame()
+
+  for (i in states){
+    for (j in c('Biden', 'Trump')){
+      a_state <- current_prez_pol %>% filter(answer == j, state == i) %>%
+                                      mutate(pol_avg = mean(pct),
+                                      state_nat_diff = pol_avg - filter(national_avg, answer == j)$pol_avg) %>%
+                                      select(state, answer, pol_avg, state_nat_diff) %>% distinct()
+      state_avg <- rbind(a_state, state_avg)
+    }
+  }
+
+  return(state_avg)
+}
+
+#execute wrapper
+state_avg <- get_state_avgs()
+
+#extract biden info
+biden_state_nat_diff <- state_avg %>% filter(answer == 'Biden') %>% rename(name = state)
+
+#join map data and biden data
+biden_diff_map <- full_join(biden_state_nat_diff, us_states) %>% st_as_sf(crs = 4326)
+```
+
+```{r plotty, echo=FALSE}
+ggplot(biden_diff_map) +
+  geom_sf(us_states, mapping = aes(fill = FALSE)) +
+  geom_sf(biden_diff_map, mapping = aes(fill = state_nat_diff)) +
+  scale_fill_gradient(low = "blue", high = "orange", trans = 'reverse')
+```
+\
+Just a map visualizing state differences in polling from the national for Biden approval/support. Orange states have less than national average and blue or purple state have higher than national average. Note that the range of avg state pols compared to national is only about 7 points in both directions. \
+
+# git extra credit
+pushed my repo and submitting the whole repo as hw \
+[HW_4 github link](https://github.com/j4yr0u93/HW_4)
