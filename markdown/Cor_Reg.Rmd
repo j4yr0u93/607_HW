@@ -1,0 +1,185 @@
+---
+title: "Correlation And Regression"
+author: "j4yr0u93"
+date: "10/14/2020"
+output: html_document
+---
+
+```{r load, include=FALSE}
+library(tidyverse)
+library(ggfortify)
+library(broom)
+library(gganimate)
+grey_matter <- read_csv('../data/GreyMatter.csv')
+liver_prep <- read_csv('../data/LiverPreparation.csv')
+grassland <- read_csv('../data/GrasslandNutrients.csv')
+beetle <- read_csv('../data/Beetle.csv')
+teeth <- read_csv('../data/Teeth.csv')
+cat_lady <- data.frame(cats = c(-0.3, 0.42, 0.85, -0.45, 0.22, -0.12, 1.46, -0.79, 0.40, -0.07), happiness_score = c(-0.57, -0.10, -0.04, -0.29, 0.42, -0.92, 0.99, -0.62, 1.14, 0.33))
+```
+
+# 1a
+```{r brain_pasta_plot, echo=FALSE}
+ggplot(grey_matter, mapping = aes(x = greymatter, y = proficiency)) +
+  geom_point() +
+  theme_minimal()
+```
+
+# 1b
+```{r brain_pasta_cor, echo=FALSE}
+cor(grey_matter)
+```
+
+# 1c
+```{r brain_pasta_lm, echo=FALSE}
+cor.test(grey_matter$greymatter, grey_matter$proficiency)
+```
+
+# 1d
+```{r brain_pasta_assumptions, echo=FALSE}
+pasta_lm <- lm(data = grey_matter, proficiency~greymatter)
+par(mfrow = c(2,2))
+plot(pasta_lm, which = c(1, 2, 4, 5))
+```
+\
+Pearson assumptions of linear data; football residuals vs. fitted implies homoscedasticity or finite variance, qq plot quantiles fall in fitted line, no values with high cook's D implies they all fall in the model.
+
+# 1e
+The scatter plot looks like it meets these assumptions since it looks like the points follow a linear trend. I would say the scatter plot meets our assumptions. \
+
+# 1f
+Positive correlation of proficiency and grey matter density with a robust linear model implies that learning a second language does in fact increase brain gray-matter. \
+
+# 2a
+```{r liver_cor, echo=FALSE}
+cor(liver_prep)
+```
+
+# 2b
+```{r liver_plot, echo=FALSE}
+ggplot(liver_prep, mapping = aes(x = concentration, y = unboundFraction)) +
+  geom_point() +
+  theme_minimal()
+```
+
+# 2c
+The data shown appears to be non-linear, this would interefere with determining correlation using the default linear pearson assumptions of the `cor()` function. \
+
+# 2d
+You could put the information on a log scale by applying `log()` to concentration, like so. \
+
+```{r log_liver, echo=FALSE}
+ggplot(liver_prep, mapping = aes(x = log(concentration), y = unboundFraction)) +
+  geom_point() +
+  theme_minimal()
+```
+  
+# 3a
+```{r cat_cor, echo=FALSE}
+cor.test(cat_lady$cats, cat_lady$happiness_score)
+```
+\
+Yes these variables correlate.
+
+# 3b
+```{r cat_se, echo=FALSE}
+#se from book
+sqrt((1-cor(cat_lady)[1,2]**2)/(10-2))
+
+#se from answer key
+(0.91578829 - cor(cat_lady)[1,2])/2
+
+
+```
+\
+The first SE value shown is calculated using the book but doesn't make sense in the context of CI nor does it seem at all similar to the SE from simulation below. The second SE is determined with CI and the correlation value, and seems similar to the simulation SE, likely being the correct method in this scenario.
+
+# 3c
+```{r cat_sim_se, echo=FALSE}
+so_many_cats <- replicate(1000, cor(sample_n(cat_lady, size = nrow(cat_lady), replace = TRUE))[1,2])
+
+
+sd(so_many_cats)
+```
+\
+SE from simulation is relatively close to to SE determined using CI and correlation.
+
+# 4a
+```{r plant_scatter, echo=FALSE}
+ggplot(grassland, mapping = aes(x = nutrients, y = species)) +
+  geom_point()
+```
+ \
+Nutrients is the explanatory variable and number of plant species is the response variable. \
+
+# 4b
+```{r plant_slope, echo=FALSE}
+plant_lm <- lm(data = grassland, species~nutrients)
+plant_lm
+paste('std error is', sqrt((1-cor(grassland)[1,2]**2)/(10-2)))
+```
+Rate of change in # of plant species from nutrient type added is -3.4 \
+
+# 4c
+```{r plant_cor, echo=FALSE}
+ggplot(grassland, mapping = aes(x = nutrients, y = species)) +
+  geom_point() +
+  geom_line(fortify(plant_lm), mapping = aes(x = nutrients, y = .fitted))
+```
+
+# 4d
+```{r plant_null, echo=FALSE}
+anova(plant_lm)
+```
+
+We can reject the null hypothesis of no treatment effect on the number of plant species. \
+
+# 5a
+```{r beetle_resid, echo=FALSE}
+beetle_lm <- lm(wingMass~hornSize, beetle)
+beetle_resids <- residuals(beetle_lm) %>% cbind(beetle)
+beetle_resids <- beetle_resids %>% rename(residues = ".")
+beetle_resids
+```
+
+# 5b
+```{r beetle_resid_plot, echo=FALSE}
+ggplot(beetle_resids, mapping = aes(x = hornSize, y = residues)) +
+  geom_point() +
+  geom_abline()
+```
+
+# 5c
+No pattern is present when looking at the model plot. The original plot looks like it has low correlation and the assumption of linear model was incorrect. \
+
+# 5d
+The original plot should be reassessed and either transformed to meet assumptions of linearity or considered to be non-linear or not have correlation.
+
+# 6a
+```{r teeth_cor, echo=FALSE}
+cor(teeth)[1,2]
+```
+Slope or correlation is ~ -0.95 \
+
+# 6b
+The dashed lines next to the regression are confidence bands, which show us precisions and error coefficients. \
+
+# 6c
+The other lines furthest from the regression line are the prediction interval and this space contains all possible points with deviation from the regression. This accounts for SE. \
+
+# 6d
+```{r teeth_plot, echo=FALSE}
+teeth_predict <- lm(deltaC14~dateOfBirth, teeth) %>% predict(interval = "confidence") %>% as_tibble %>% rename(lwr_ci = lwr, upr_ci = upr, fit_ci = fit) %>% cbind(teeth)
+
+teeth_predict <- lm(deltaC14~dateOfBirth, teeth) %>% predict(interval = "prediction") %>% as_tibble %>% rename(lwr_p = lwr, upr_p = upr, fit_p = fit) %>% cbind(teeth_predict)
+
+ggplot(teeth_predict, mapping = aes(x = dateOfBirth, y = deltaC14)) +
+  geom_point() +
+  geom_line(fortify(lm(deltaC14~dateOfBirth, teeth)), mapping = aes(x = dateOfBirth, y = .fitted)) +
+  geom_ribbon(aes(ymin = lwr_p, ymax = upr_p), alpha = 0.1) +
+  geom_ribbon(aes(ymin = lwr_ci, ymax = upr_ci), alpha = 0.3)
+```
+
+# git extra credit
+pushed my repo and submitting the whole repo as hw \
+[HW_4 github link](https://github.com/j4yr0u93/HW_4)
