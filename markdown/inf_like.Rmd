@@ -1,0 +1,97 @@
+---
+title: "Inference and Likelihood"
+author: "j4yr0u93"
+date: "10/22/2020"
+output: html_document
+---
+
+```{r load, include=FALSE}
+library(tidyverse)
+library(rayshader)
+library(profileModel)
+library(colorfindr)
+library(TSP)
+#load puffer
+puffer <- read_csv("../data/puffer.csv")
+#make palete for stuff
+img_palette <- get_colors(img = '../data/fall.jpg') %>% make_palette(n = 4)
+# Sort colors
+rgb <- col2rgb(img_palette)
+# create TSP for colors
+tsp <- as.TSP(dist(t(rgb)))
+# solve TSP for colors
+sol <- solve_TSP(tsp, control = list(repetitions = 1e3))
+# use TSP solution to reorder palette
+ordered_palette <- img_palette[sol]
+```
+
+# 1
+
+I believe I gravitate towards Inductive Reasoning for the most part. Sometimes I get some wild ideas but it is only after I observe and understand a pattern then I get these ideas. I don't believe I come up with a theory without some kind of observation beforehand, and even then I search out for pattern before continuing. Deductive reasoning does seem fun at times though. \
+
+# 2
+
+I think I am more in favor of the Lakatos model. Once I have an understanding of some sort of observation or pattern I like to generally explore all possible paths off of my core theory to lay out my cards. I overthink alot though as well, so there is a bit of me just trying to make sure that there will be ideas that check out or can be explore if a hypothesis doesn't fit a model. \
+ \
+I don't really have my own research program right now persay, but reading into Lakatos it seems his work combines ideas of Popper(falsificationism) and Kuhn(random discovery). The goal is to have an irrefutable core which if invalid would invalidate the entirety of the research program, and then have ideas or evidence that can be wrong which are explored and tested. This is my paraphrased understanding at least. The intent is to establish a research programme in which the researcher has enough information to suggest that there is something discoverable or a hypothesis that can be supported. \
+
+# 3
+```{r puff, echo=FALSE}
+#getting parameters
+puffer_lm <- lm(predators ~ resemblance, data = puffer)
+summary(puffer_lm)
+
+#making likelihood function based on class code
+lik <- function(slope, intercept, residuals_sd){
+  #lik input
+  mimic <- intercept + slope * puffer$resemblance
+  
+  #lik with log true
+  sum(dnorm(puffer$predators, mimic, residuals_sd, log=TRUE))
+}
+
+#grid sampling based on in class code
+grid_sample <- crossing(intercept = seq(0.5, 3.5, .1),
+                 slope = seq(2, 4, 0.1),
+                 residuals_sd = seq(2.8, 3.2, 0.05)) %>%
+  rowwise() %>%
+  mutate(logLik = lik(slope, intercept, residuals_sd)) %>% 
+  ungroup()
+
+#ML vals are
+grid_sample %>% filter(logLik == max(logLik))
+puffer_lm
+```
+
+Grid sampling values for intercept, slope, and residuals_sd seem to be in line with the linear model and the log likelihood value being negative suggests low probability. \
+
+# 4
+```{r surfaces, echo=FALSE}
+grid_sample %>% filter(residuals_sd == 2.9) %>% ggplot(mapping = aes(x = intercept, y = slope)) +
+  geom_raster(aes(fill = logLik)) +
+  scale_fill_gradientn(colours = ordered_palette, trans = 'exp')
+```
+ \
+The color palette I made and applied really makes the trend in this rasterplot stand out, at least I think.
+
+
+# 5
+```{r glm, echo=FALSE}
+#glm based on class code
+puffer_glm <- glm(predators ~ resemblance, data = puffer)
+
+#profile based on class code, quantile is upper CI
+puff_profile <- profileModel(puffer_glm,
+                        objective = "ordinaryDeviance",
+                        quantile = qchisq(0.95, 1))
+
+plot(puff_profile)
+
+confint(puffer_glm)
+```
+
+CI from profile plots for intercept and resemblance matches CI values from `confint()` used on same model.when looking at parabolic and asymptote intersection. \
+
+# git extra credit
+pushed my repo and submitting the whole repo as hw \
+[github link](https://github.com/j4yr0u93/607_HW)
