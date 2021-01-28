@@ -1,0 +1,230 @@
+---
+title: "GLM Practice"
+author: "j4yr0u93"
+date: "11/25/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+#load libs and data
+library(tidyverse)
+library(readr)
+library(ggfortify)
+library(car)
+library(emmeans)
+library(janitor)
+library(brms)
+library(bayesplot)
+library(tidybayes)
+library(ggdist)
+cone <- read_csv("../data/PineCones.csv")
+#make cone model
+cone_lm <- lm(conemass ~ habitat, data = cone)
+```
+
+# 1.1
+```{r 1.1, echo=FALSE}
+#boxplot cause lazy & easy
+ggplot(cone, mapping = aes(x = habitat, y = conemass)) +
+  geom_boxplot() +
+  theme_minimal()
+```
+
+# 1.2
+```{r 1.2, echo=FALSE}
+#test assumptions
+par(mfrow=c(1, 3))
+plot(cone_lm, which = c(1, 2, 4))
+
+#resid plot
+residualPlots(cone_lm)
+
+#lev test
+leveneTest(cone_lm)
+```
+ \
+Residuals vs fitted, qq plots, and cook's distance all look normal within acceptable range and linear.
+
+
+# 1.3
+```{r 1.3, echo=FALSE}
+#r square check
+summary(cone_lm)$r.squared
+```
+ \
+~89% of variance is explained by the independent variable.
+
+# 1.4
+```{r 1.4, echo=FALSE}
+#check emmeans to see diff and outlier
+emmeans(cone_lm, ~habitat) %>%
+  plot() +
+  theme_minimal()
+```
+ \
+Island Absent in the outlier from the means, non-default correction not required. \
+
+# 2.1
+```{r 2.1, echo=FALSE}
+#load trans data
+transplant <- read_csv('../data/fouling_transplant_data.csv') %>% clean_names()
+
+#facet for combos and plot to see basic trend
+transplant %>% 
+  ggplot(aes(x = initial_cover, y = final_cover)) +
+  geom_boxplot() +
+  facet_wrap(position_on_block~caged)
+```
+
+# 2.2
+```{r 2.2, echo=FALSE}
+#likelihood model
+trans_glm <- glm(change_in_cover ~ caged * position_on_block,
+                 data = transplant,
+                 family = gaussian())
+
+#plot relevant tests
+par(mfrow=c(1,3))
+plot(trans_glm, which = c(1, 2, 4))
+
+#shappy test
+shapiro.test(residuals(trans_glm))
+#lev
+leveneTest(trans_glm)
+```
+ \
+Residuals vs fitted, qq plots, and cook's distance all look normalish within acceptable range and linear. Separation of points on resid explained by caged * position_on_block. Shappy test and Lev test show that the model is not meeting assumptions.
+
+# 2.3
+```{r 2.3, echo=FALSE}
+#covariance w/ shap
+trans_cov <- glm(final_cover ~ caged * position_on_block + initial_cover,
+                 data = transplant,
+                 family = gaussian())
+
+shapiro.test(residuals(trans_cov))
+
+#change model w/ shap
+trans_delta <- glm(change_in_cover/initial_cover ~ caged * position_on_block,
+                   data = transplant,
+                   family = gaussian())
+
+shapiro.test(residuals(trans_delta))
+
+#logit model w/ shap
+trans_logit <- glm(logit(initial_cover) - logit(final_cover) ~ caged * position_on_block,
+                   data = transplant,
+                   family = gaussian())
+
+shapiro.test(residuals(trans_logit))
+
+#lev on relevant model
+leveneTest(trans_delta)
+
+#plot relevant tests
+par(mfrow=c(1,3))
+plot(trans_delta, which = c(1, 2, 4))
+```
+ \
+trans_delta or option 2 has a larger p val and slightly wack qq/resid plots but the best cooks vals. Also has the smallest AIC val which correlates to  better fit. \
+
+# 2.4
+```{r 2.4, echo=FALSE}
+#anova relevant model
+anova(trans_delta)
+
+#emeans checks of possible variances in model
+emmeans(trans_delta, ~caged) %>%
+  contrast(method = "tukey")
+
+emmeans(trans_delta, ~position_on_block) %>%
+  contrast(method = "tukey")
+
+#plot 2 options
+par(mfrow=c(2,1))
+
+emmeans(trans_delta, ~caged) %>%
+  as_tibble %>%
+  ggplot(aes(x = caged, y = emmean, 
+             ymin = emmean-SE, ymax = emmean+SE)) +
+           geom_pointrange() +
+  theme_minimal()
+
+
+
+
+emmeans(trans_delta, ~position_on_block) %>%
+  as_tibble %>%
+  ggplot(aes(x = position_on_block, y = emmean, 
+             ymin = emmean-SE, ymax = emmean+SE)) +
+           geom_pointrange() +
+  theme_minimal()
+
+```
+ \
+Difference in position has same diff in mean as caged. Impacts on the system are equal and connected for open vs caged. Both variables appear to be significant with alpha 0.08 on the systems and signif sub that alpha. \
+
+# 3.1
+```{r 3.1, echo=FALSE}
+#load rat
+rat <- read_csv('../data/MoleRat.csv') %>% clean_names()
+
+#prelim plot wrap
+ggplot(rat,
+       aes(x = lnmass,
+           y = lnenergy)) +
+  geom_point() +
+  stat_smooth() +
+  facet_wrap(.~caste) +
+  theme_minimal()
+
+#rat bay
+rat_brm <- brm(lnenergy ~ lnmass + caste,
+               data = rat)
+
+#check rat bay
+pp_check(rat_brm)
+```
+ \
+BRM pp_check looks like normal chains with somewhat of a normal curve. Data should meet assumptions.\
+
+# 3.2
+```{r 3.2, echo=FALSE}
+#interaction rat
+rat_brm2 <- brm(lnenergy ~ lnmass * caste,
+               data = rat)
+
+#compare rats
+loo_compare(loo(rat_brm), loo(rat_brm2))
+```
+ \
+First brm is better option for modeling, interaction model is messy. lnmass + caste > lnmass * caste. \
+
+# 3.3
+```{r 3.3, echo=FALSE}
+#emmeans looking at lazy vs. worker
+emmeans(rat_brm, ~caste) %>%
+  as_tibble() %>%
+  ggplot(aes(x = caste, y = emmean, 
+             ymin = lower.HPD, ymax = upper.HPD)) +
+           geom_pointrange() +
+  theme_minimal()
+```
+ \
+There is a clear difference in the means of lazy and worker. I would plot my model before discussing my conclusions further. I assume a more visually appealing plot will make it more clear. \
+
+# 3.4
+```{r 3.4, echo=FALSE}
+#very pretty plot
+rat %>%
+  group_by(caste) %>%
+  modelr::data_grid(lnmass = modelr::seq_range(lnmass, 100)) %>%
+  ungroup() %>%
+  add_fitted_draws(rat_brm) %>%
+  rename(lnenergy = .value) %>%
+  ggplot(aes(x = lnmass, y = lnenergy, color = caste)) +
+  stat_lineribbon() +
+  scale_fill_viridis_d() +
+  geom_point(data = rat) +
+  theme_minimal()
+```

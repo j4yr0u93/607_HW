@@ -1,0 +1,136 @@
+---
+title: "Cross-Validation and Bayes Homework"
+author: "j4yr0u93"
+date: "10/28/2020"
+output: html_document
+---
+
+```{r load, include=FALSE}
+library(tidyverse)
+library(modelr)
+library(rsample)
+library(AICcmodavg)
+library(boot)
+library(palmerpenguins)
+poggers <- read_csv("../data/progesterone.csv")
+```
+
+# 1
+```{r polyamorous_plot, echo=FALSE}
+#ggplot with standard lm line and poly line
+poggers %>% ggplot(mapping = aes(x = ventilation, y = progesterone)) + geom_point() + stat_smooth(method = "lm", formula = y ~ poly(x,3), color = 'purple', alpha = 0.2, fill = 'blue') + stat_smooth(method = "lm", formula = y ~ x, color = 'orange', alpha = 0.2, fill = 'yellow')
+
+#standard lm and poly scale x val lm
+prog_lm <- lm(progesterone ~ ventilation, data = poggers)
+prog5_lm <- lm(progesterone ~ poly(ventilation, 5), data = poggers)
+
+#rsquare values for each model
+rsquare(prog_lm, poggers)
+rsquare(prog5_lm, poggers)
+```
+
+The 5 poly scale seems to have a higher r-squared value, indicating more of a relationship between the independent variable and dependent variable. \
+
+# 2a
+```{r 5_finger_fold_run, echo=FALSE}
+#vfold x crossing for all 5 possibilities
+pog_folds <- vfold_cv(poggers, 5)
+polys <- c(1:5)
+
+pog_fold <- crossing(pog_folds$id, polys)
+
+names(pog_fold)[names(pog_fold) == "pog_folds$id"] = "id"
+
+pog_fold <- pog_fold %>% full_join(pog_folds)
+
+summary(pog_fold)
+```
+
+# 2b
+```{r polyglot_cats, echo=FALSE}
+#map2 fm(fit models) with poly of different possibilities 1:5
+pog_cat <- pog_fold %>% mutate(fm = map2(splits, polys,
+                    ~lm(ventilation ~ poly(progesterone, .y), 
+                        data = analysis(.x))))
+summary(pog_cat)
+```
+
+# 2c
+```{r ramsey, echo=FALSE}
+#rmse with pog cat and display summary
+pog_rmse <- pog_cat %>% mutate(rmse = map2_dbl(splits, fm, ~rmse(model = .y, data = assessment(.x))))
+
+summary(pog_rmse)
+```
+
+# 2d
+```{r imps, echo=FALSE}
+#plotting mean rmse for polys to visualize best poly for model
+pog_imps <- pog_rmse %>% group_by(polys) %>% summarize(mean_rmse = mean(rmse)) %>% ungroup() 
+
+pog_imps %>% ggplot(mapping = aes(x = polys, y = mean_rmse)) + geom_point() + geom_line() + theme_minimal()
+```
+A poly of 4 gives us our peak rmse so it is likely the optimal model.
+
+# 3
+```{r AOC, echo=FALSE}
+#AIC for poly pick to compare to mean rmse
+pog_kibble <- data.frame(polys = 1:5) %>% mutate(model = map(polys, ~lm(ventilation ~ poly(progesterone, .x), data = poggers)))
+
+aictab(pog_kibble$model, pog_kibble$polys)
+```
+AICtab says that 5 poly is a better model than 4, which I agree with since my initial plot was a 5 model and to my naked eye the fit does look better.
+
+# 4
+```{r cowboy_boot, echo=FALSE}
+#booting the poggers to get a cv for each poly
+pog_cv <- data.frame(polys = 1:5) %>% mutate(gm = map(polys, ~glm(ventilation ~ poly(progesterone, .x), data = poggers))) %>%
+  mutate(cv = map2_dbl(polys, gm, ~cv.glm(poggers, .y)$delta[1])) %>% select(polys, cv)
+
+pog_cv
+```
+
+# 5a
+
+```{r pingu, echo=FALSE}
+#load peng and plot basic for viz
+pingu <- penguins %>% filter(species == 'Gentoo', sex == 'female', !is.na(flipper_length_mm))
+
+pingu %>% ggplot(mapping = aes(x = flipper_length_mm)) +
+  geom_density() +
+  theme_minimal()
+```
+
+# 5b
+```{r pingu_grid, echo=FALSE}
+#make grid for bayes func ltr
+grid_init <- crossing(mean = seq(205, 220, length.out = 100),
+                      sd = seq(3, 5, length.out = 100))
+#show grid exists properly
+str(grid_init)
+```
+
+# 5c
+```{r happy_meal_combo, echo=FALSE}
+#get my numerator
+wombo_combo <- function(mean, sd){
+  sum(dnorm(pingu$flipper_length_mm, mean, sd, log = TRUE)) +
+    dnorm(mean, 210, 50, log = TRUE) +
+    dunif(sd, 1, 10, log = TRUE)
+}
+```
+
+# 5d
+```{r pingu_ping, ECHO=FALSE}
+#execute function on the data to get log posterior
+post <- grid_init %>%
+  rowwise(mean,sd) %>%
+  mutate(num = wombo_combo(mean,sd)) %>%
+  ungroup() %>%
+  mutate(log_post = num - log(sum(exp(num))),
+         post = exp(log_post))
+
+post %>% filter(log_post == max(log_post))
+```
+
+I mean it is a bayes approach rather than frequentist so the difference in the modal estimate is a question of likelihood rather than significance. It is unlikely to pick this particular penguin out of all of our penguins even though visually it is on the peak of our 'normal' curve. Our skew in our data is positive and kurtosis is potentially less than 1. Normal but not perfectly uniform data.
